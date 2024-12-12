@@ -86,7 +86,13 @@ export default async function handler(
           reply: { in_reply_to_tweet_id: tweetId },
           media:
             mediaIds.length > 0
-              ? { media_ids: mediaIds as [string, ...string[]] }
+              ? {
+                  media_ids: mediaIds.slice(0, 4) as
+                    | [string]
+                    | [string, string]
+                    | [string, string, string]
+                    | [string, string, string, string],
+                }
               : undefined,
         });
 
