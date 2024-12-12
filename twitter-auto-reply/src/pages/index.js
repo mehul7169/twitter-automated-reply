@@ -39,20 +39,27 @@ function App() {
 
   const validateUrls = (urls) => {
     const errors = [];
-    const validUrls = [];
+    const seenUrls = new Set(); // Track unique URLs
     const urlPattern =
       /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
 
-    urls.split("\n").forEach((url, index) => {
-      const trimmedUrl = url.trim();
-      if (!trimmedUrl) return;
-
-      if (!urlPattern.test(trimmedUrl)) {
-        errors.push(`Line ${index + 1}: Invalid Twitter/X URL format`);
-      } else {
-        validUrls.push(trimmedUrl);
-      }
-    });
+    // First pass: collect valid unique URLs
+    const validUrls = urls
+      .split("\n")
+      .map((url) => url.trim())
+      .filter((url) => {
+        if (!url) return false;
+        if (!urlPattern.test(url)) {
+          errors.push(`Invalid Twitter/X URL format: ${url}`);
+          return false;
+        }
+        // Only include URLs we haven't seen before
+        if (!seenUrls.has(url)) {
+          seenUrls.add(url);
+          return true;
+        }
+        return false;
+      });
 
     return { errors, validUrls };
   };
