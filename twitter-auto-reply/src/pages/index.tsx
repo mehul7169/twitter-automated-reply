@@ -1,22 +1,36 @@
-import { useState } from "react";
+import { useState, ChangeEvent, FormEvent, ReactElement } from "react";
+import type { JSX } from "react";
 import PasswordModal from "../components/PasswordModal";
+import FileUploadButton from "../components/FileUploadButton";
 
-function App() {
-  const [tweetUrls, setTweetUrls] = useState("");
-  const [replyMessage, setReplyMessage] = useState("");
-  const [results, setResults] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [validationErrors, setValidationErrors] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [pendingSubmission, setPendingSubmission] = useState(null);
+interface Result {
+  url: string;
+  status: "success" | "error";
+  reply_id?: string;
+  message?: string;
+}
 
-  const handleTweetUrlChange = (e) => {
+interface PendingSubmission {
+  validUrls: string[];
+  replyMessage: string;
+}
+
+export default function App() {
+  const [tweetUrls, setTweetUrls] = useState<string>("");
+  const [replyMessage, setReplyMessage] = useState<string>("");
+  const [results, setResults] = useState<Result[] | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [passwordError, setPasswordError] = useState<string>("");
+  const [pendingSubmission, setPendingSubmission] =
+    useState<PendingSubmission | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  const handleTweetUrlChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setTweetUrls(value);
 
-    // If the last character typed is not a newline and there's content,
-    // and the last line has a valid URL, add a new line
     if (value && !value.endsWith("\n")) {
       const lines = value.split("\n");
       const lastLine = lines[lines.length - 1];
@@ -29,7 +43,7 @@ function App() {
     }
   };
 
-  const getNumberedUrls = () => {
+  const getNumberedUrls = (): string[] => {
     if (!tweetUrls.trim()) return [];
     return tweetUrls
       .split("\n")
@@ -37,13 +51,14 @@ function App() {
       .map((url) => url.trim());
   };
 
-  const validateUrls = (urls) => {
-    const errors = [];
-    const seenUrls = new Set(); // Track unique URLs
+  const validateUrls = (
+    urls: string
+  ): { errors: string[]; validUrls: string[] } => {
+    const errors: string[] = [];
+    const seenUrls = new Set<string>();
     const urlPattern =
       /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
 
-    // First pass: collect valid unique URLs
     const validUrls = urls
       .split("\n")
       .map((url) => url.trim())
@@ -53,7 +68,6 @@ function App() {
           errors.push(`Invalid Twitter/X URL format: ${url}`);
           return false;
         }
-        // Only include URLs we haven't seen before
         if (!seenUrls.has(url)) {
           seenUrls.add(url);
           return true;
@@ -64,7 +78,7 @@ function App() {
     return { errors, validUrls };
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const { errors, validUrls } = validateUrls(tweetUrls);
 
@@ -78,16 +92,14 @@ function App() {
       return;
     }
 
-    // Store the submission data and open modal
     setPendingSubmission({ validUrls, replyMessage });
     setIsModalOpen(true);
   };
 
-  const handlePasswordSubmit = async (password) => {
+  const handlePasswordSubmit = async (password: string) => {
     if (password === process.env.NEXT_PUBLIC_PASSWORD) {
       setIsModalOpen(false);
       setPasswordError("");
-      // Process the actual submission
       await processSubmission();
     } else {
       setPasswordError("Incorrect password. Please try again.");
@@ -99,15 +111,18 @@ function App() {
 
     setIsLoading(true);
     try {
+      const formData = new FormData();
+      formData.append("tweet_urls", pendingSubmission.validUrls.join("\n"));
+      formData.append("reply_message", pendingSubmission.replyMessage);
+
+      // Append media files
+      selectedFiles.forEach((file) => {
+        formData.append("media", file);
+      });
+
       const response = await fetch("/api/reply", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tweet_urls: pendingSubmission.validUrls.join("\n"),
-          reply_message: pendingSubmission.replyMessage,
-        }),
+        body: formData,
       });
 
       const data = await response.json();
@@ -121,6 +136,11 @@ function App() {
     }
   };
 
+  const handleFileSelect = (files: FileList) => {
+    setSelectedFiles(Array.from(files).slice(0, 4));
+  };
+
+  // Rest of the JSX remains the same
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 via-white to-purple-100">
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -148,7 +168,7 @@ function App() {
                   value={tweetUrls}
                   onChange={handleTweetUrlChange}
                   placeholder="https://twitter.com/user/status/123456789..."
-                  rows="5"
+                  rows={5}
                   required
                   className="w-full pl-16 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
                 />
@@ -177,15 +197,29 @@ function App() {
               >
                 Reply Message:
               </label>
-              <textarea
-                id="replyMessage"
-                value={replyMessage}
-                onChange={(e) => setReplyMessage(e.target.value)}
-                placeholder="Enter your reply message..."
-                rows="3"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
-              />
+              <div className="relative">
+                <textarea
+                  id="replyMessage"
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
+                  placeholder="Enter your reply message..."
+                  rows={3}
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
+                />
+                <div className="absolute bottom-3 right-3">
+                  <FileUploadButton onFileSelect={handleFileSelect} />
+                </div>
+              </div>
+              {selectedFiles.length > 0 && (
+                <div className="mt-2 flex gap-2">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="text-sm text-gray-600">
+                      {file.name}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {validationErrors.length > 0 && (
@@ -310,5 +344,3 @@ function App() {
     </div>
   );
 }
-
-export default App;
