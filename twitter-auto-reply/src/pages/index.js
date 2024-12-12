@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PasswordModal from "../components/PasswordModal";
 
 function App() {
   const [tweetUrls, setTweetUrls] = useState("");
@@ -6,6 +7,9 @@ function App() {
   const [results, setResults] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [pendingSubmission, setPendingSubmission] = useState(null);
 
   const handleTweetUrlChange = (e) => {
     const value = e.target.value;
@@ -55,9 +59,6 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setValidationErrors([]);
-    setResults(null);
-
     const { errors, validUrls } = validateUrls(tweetUrls);
 
     if (errors.length > 0) {
@@ -70,8 +71,26 @@ function App() {
       return;
     }
 
-    setIsLoading(true);
+    // Store the submission data and open modal
+    setPendingSubmission({ validUrls, replyMessage });
+    setIsModalOpen(true);
+  };
 
+  const handlePasswordSubmit = async (password) => {
+    if (password === process.env.NEXT_PUBLIC_PASSWORD) {
+      setIsModalOpen(false);
+      setPasswordError("");
+      // Process the actual submission
+      await processSubmission();
+    } else {
+      setPasswordError("Incorrect password. Please try again.");
+    }
+  };
+
+  const processSubmission = async () => {
+    if (!pendingSubmission) return;
+
+    setIsLoading(true);
     try {
       const response = await fetch("/api/reply", {
         method: "POST",
@@ -79,8 +98,8 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tweet_urls: validUrls.join("\n"),
-          reply_message: replyMessage,
+          tweet_urls: pendingSubmission.validUrls.join("\n"),
+          reply_message: pendingSubmission.replyMessage,
         }),
       });
 
@@ -91,6 +110,7 @@ function App() {
       setValidationErrors(["Failed to send replies. Please try again."]);
     } finally {
       setIsLoading(false);
+      setPendingSubmission(null);
     }
   };
 
@@ -269,6 +289,17 @@ function App() {
           )}
         </main>
       </div>
+
+      <PasswordModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setPasswordError("");
+          setPendingSubmission(null);
+        }}
+        onSubmit={handlePasswordSubmit}
+        error={passwordError}
+      />
     </div>
   );
 }
