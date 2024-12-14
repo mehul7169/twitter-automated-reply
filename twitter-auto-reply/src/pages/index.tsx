@@ -2,6 +2,7 @@ import { useState, ChangeEvent, FormEvent, ReactElement } from "react";
 import type { JSX } from "react";
 import PasswordModal from "../components/PasswordModal";
 import FileUploadButton from "../components/FileUploadButton";
+import AccountSelector from "../components/AccountSelectors";
 
 interface Result {
   url: string;
@@ -13,6 +14,7 @@ interface Result {
 interface PendingSubmission {
   validUrls: string[];
   replyMessage: string;
+  selectedAccount: "mehul" | "yashraj";
 }
 
 export default function App() {
@@ -26,6 +28,9 @@ export default function App() {
   const [pendingSubmission, setPendingSubmission] =
     useState<PendingSubmission | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<"mehul" | "yashraj">(
+    "mehul"
+  );
 
   const handleTweetUrlChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -92,7 +97,7 @@ export default function App() {
       return;
     }
 
-    setPendingSubmission({ validUrls, replyMessage });
+    setPendingSubmission({ validUrls, replyMessage, selectedAccount });
     setIsModalOpen(true);
   };
 
@@ -114,6 +119,7 @@ export default function App() {
       const formData = new FormData();
       formData.append("tweet_urls", pendingSubmission.validUrls.join("\n"));
       formData.append("reply_message", pendingSubmission.replyMessage);
+      formData.append("selected_account", pendingSubmission.selectedAccount);
 
       // Append media files
       selectedFiles.forEach((file) => {
@@ -138,6 +144,10 @@ export default function App() {
 
   const handleFileSelect = (files: FileList) => {
     setSelectedFiles(Array.from(files).slice(0, 4));
+  };
+
+  const handleAccountSelect = (account: "mehul" | "yashraj") => {
+    setSelectedAccount(account);
   };
 
   // Rest of the JSX remains the same
@@ -234,6 +244,8 @@ export default function App() {
                 </ul>
               </div>
             )}
+
+            <AccountSelector onAccountSelect={handleAccountSelect} />
 
             <button
               type="submit"
