@@ -3,6 +3,7 @@ import type { JSX } from "react";
 import PasswordModal from "../components/PasswordModal";
 import FileUploadButton from "../components/FileUploadButton";
 import AccountSelector from "../components/AccountSelectors";
+import { ACCOUNTS_TO_ACCESS_TOKENS } from "../utils/constants";
 
 interface Result {
   url: string;
@@ -14,7 +15,7 @@ interface Result {
 interface PendingSubmission {
   validUrls: string[];
   replyMessage: string;
-  selectedAccount: "mehul" | "yashraj";
+  selectedAccount: keyof typeof ACCOUNTS_TO_ACCESS_TOKENS;
 }
 
 export default function App() {
@@ -28,9 +29,8 @@ export default function App() {
   const [pendingSubmission, setPendingSubmission] =
     useState<PendingSubmission | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<"mehul" | "yashraj">(
-    "mehul"
-  );
+  const [selectedAccount, setSelectedAccount] =
+    useState<keyof typeof ACCOUNTS_TO_ACCESS_TOKENS>("mehul");
 
   const handleTweetUrlChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -146,7 +146,9 @@ export default function App() {
     setSelectedFiles(Array.from(files).slice(0, 4));
   };
 
-  const handleAccountSelect = (account: "mehul" | "yashraj") => {
+  const handleAccountSelect = (
+    account: keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
+  ) => {
     setSelectedAccount(account);
   };
 
