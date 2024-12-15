@@ -38,11 +38,11 @@ export default function App() {
 
     if (value && !value.endsWith("\n")) {
       const lines = value.split("\n");
-      const lastLine = lines[lines.length - 1];
+      const lastLine = lines[lines.length - 1].trim();
       const urlPattern =
         /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
 
-      if (urlPattern.test(lastLine.trim())) {
+      if (urlPattern.test(lastLine)) {
         setTweetUrls(value + "\n");
       }
     }
@@ -69,12 +69,13 @@ export default function App() {
       .map((url) => url.trim())
       .filter((url) => {
         if (!url) return false;
-        if (!urlPattern.test(url)) {
-          errors.push(`Invalid Twitter/X URL format: ${url}`);
+        const cleanUrl = url.replace(/\s+$/g, "");
+        if (!urlPattern.test(cleanUrl)) {
+          errors.push(`Invalid Twitter/X URL format: ${cleanUrl}`);
           return false;
         }
-        if (!seenUrls.has(url)) {
-          seenUrls.add(url);
+        if (!seenUrls.has(cleanUrl)) {
+          seenUrls.add(cleanUrl);
           return true;
         }
         return false;

@@ -27,13 +27,21 @@ export default async function handler(
 
   try {
     const data = await parseForm(req);
-    const urls = data.tweet_urls.split("\n").filter(Boolean);
+    // Clean up URLs, removing any whitespace or hidden characters
+    const urls = data.tweet_urls
+      .split("\n")
+      .map((url) => url.trim())
+      .filter(
+        (url) =>
+          url &&
+          url.match(
+            /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/
+          )
+      );
     const selectedAccount = data.selected_account;
 
     // Get credentials for selected account
     const accountCredentials = ACCOUNTS_TO_ACCESS_TOKENS[selectedAccount];
-
-    console.log(accountCredentials);
 
     const client = new TwitterApi({
       appKey: process.env.TWITTER_API_KEY!,
@@ -48,50 +56,105 @@ export default async function handler(
       reply_id?: string;
       message?: string;
     }[] = [];
+
     const v2Client = client.v2;
 
-    for (const url of urls) {
+    // Upload media first if present
+    let mediaIds: string[] = [];
+    if (data.media && data.media.length > 0) {
+      const mediaPromises = data.media.map(async (file) => {
+        const mediaBuffer = fs.readFileSync(file.filepath);
+        return await client.v1.uploadMedia(mediaBuffer, {
+          mimeType: file.mimetype || undefined,
+        });
+      });
+
+      mediaIds = await Promise.all(mediaPromises);
+    }
+
+    // Process URLs in reverse order
+    const reversedUrls = [...urls].reverse();
+
+    for (let i = 0; i < reversedUrls.length; i++) {
+      const url = reversedUrls[i];
+
+      // Reduced delay between tweets
+      if (i > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 3000)); // Reduced from 10s to 3s
+      }
+
       try {
-        const tweetId = url.split("/").pop()!;
-        let mediaIds: string[] = [];
+        // Clean up the tweet ID - remove any whitespace or hidden characters
+        const tweetId = url.split("/").pop()!.trim();
+        let retries = 3;
 
-        // Process media if present
-        if (data.media && data.media.length > 0) {
-          const mediaPromises = data.media.map(async (file) => {
-            const mediaBuffer = fs.readFileSync(file.filepath);
-            const mediaResponse = await client.v1.uploadMedia(mediaBuffer, {
-              mimeType: file.mimetype || undefined,
+        while (retries > 0) {
+          try {
+            console.log(
+              `Attempting to reply to tweet ${url} (Attempt ${4 - retries}/3)`
+            );
+
+            // Clean up the reply message
+            const cleanMessage = data.reply_message.trim();
+
+            const reply = await v2Client.reply(cleanMessage, tweetId, {
+              media:
+                mediaIds.length > 0
+                  ? {
+                      media_ids: mediaIds.slice(0, 4) as
+                        | [string]
+                        | [string, string]
+                        | [string, string, string]
+                        | [string, string, string, string],
+                    }
+                  : undefined,
             });
-            return mediaResponse;
-          });
 
-          mediaIds = await Promise.all(mediaPromises);
+            results.push({
+              url,
+              status: "success",
+              reply_id: reply.data.id,
+            });
+            console.log(`Successfully replied to tweet: ${url}`);
+
+            // Reduced delay after successful reply
+            await new Promise((resolve) => setTimeout(resolve, 2000)); // Reduced from 5s to 2s
+            break;
+          } catch (error: any) {
+            console.error(
+              `Attempt ${4 - retries}/3 failed for tweet ${url}:`,
+              error.code,
+              error.message,
+              error.data || ""
+            );
+
+            if ((error.code === 503 || error.code === 429) && retries > 1) {
+              retries--;
+              const backoffTime = (4 - retries) * 5000; // Reduced from 8s to 5s base
+              console.log(`Waiting ${backoffTime / 1000}s before retry...`);
+              await new Promise((resolve) => setTimeout(resolve, backoffTime));
+              continue;
+            }
+            throw error;
+          }
         }
-
-        // Send the reply
-        const reply = await v2Client.reply(data.reply_message, tweetId, {
-          media:
-            mediaIds.length > 0
-              ? {
-                  media_ids: mediaIds.slice(0, 4) as
-                    | [string]
-                    | [string, string]
-                    | [string, string, string]
-                    | [string, string, string, string],
-                }
-              : undefined,
-        });
-
-        results.push({
-          url,
-          status: "success",
-          reply_id: reply.data.id,
-        });
       } catch (error: any) {
+        console.error(`Final error processing tweet ${url}:`, {
+          code: error.code,
+          message: error.message,
+          data: error.data || "",
+          stack: error.stack,
+        });
+
         results.push({
           url,
           status: "error",
-          message: error.message || "Failed to send reply",
+          message:
+            error.code === 503
+              ? `Twitter service unavailable: ${error.message}`
+              : error.code === 429
+              ? `Rate limit exceeded: ${error.message}`
+              : error.message || "Failed to send reply",
         });
       }
     }
@@ -121,29 +184,22 @@ function parseForm(req: NextApiRequest): Promise<ParsedData> {
       maxFileSize: 5 * 1024 * 1024, // 5MB
     });
 
-    form.parse(req, (err, fields: formidable.Fields, files) => {
+    form.parse(req, (err, fields, files) => {
       if (err) reject(err);
 
-      const tweet_urls = fields.tweet_urls as string | string[] | undefined;
-      const reply_message = fields.reply_message as
-        | string
-        | string[]
-        | undefined;
-      const selected_account = fields.selected_account as
-        | string
-        | string[]
-        | undefined;
-
       resolve({
-        tweet_urls: Array.isArray(tweet_urls)
-          ? tweet_urls[0]
-          : tweet_urls || "",
-        reply_message: Array.isArray(reply_message)
-          ? reply_message[0]
-          : reply_message || "",
-        selected_account: (Array.isArray(selected_account)
-          ? selected_account[0]
-          : selected_account || "") as keyof typeof ACCOUNTS_TO_ACCESS_TOKENS,
+        tweet_urls: (Array.isArray(fields.tweet_urls)
+          ? fields.tweet_urls[0]
+          : fields.tweet_urls || ""
+        ).trim(),
+        reply_message: (Array.isArray(fields.reply_message)
+          ? fields.reply_message[0]
+          : fields.reply_message || ""
+        ).trim(),
+        selected_account: (Array.isArray(fields.selected_account)
+          ? fields.selected_account[0].trim()
+          : fields.selected_account?.trim() ||
+            "") as keyof typeof ACCOUNTS_TO_ACCESS_TOKENS,
         media: Array.isArray(files.media)
           ? files.media
           : files.media
