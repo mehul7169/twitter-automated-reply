@@ -187,6 +187,10 @@ function parseForm(req: NextApiRequest): Promise<ParsedData> {
     form.parse(req, (err, fields, files) => {
       if (err) reject(err);
 
+      const selectedAccount = Array.isArray(fields.selected_account)
+        ? String(fields.selected_account[0]).trim()
+        : String(fields.selected_account || "").trim();
+
       resolve({
         tweet_urls: (Array.isArray(fields.tweet_urls)
           ? fields.tweet_urls[0]
@@ -196,10 +200,8 @@ function parseForm(req: NextApiRequest): Promise<ParsedData> {
           ? fields.reply_message[0]
           : fields.reply_message || ""
         ).trim(),
-        selected_account: (Array.isArray(fields.selected_account)
-          ? fields.selected_account[0].trim()
-          : fields.selected_account?.trim() ||
-            "") as keyof typeof ACCOUNTS_TO_ACCESS_TOKENS,
+        selected_account:
+          selectedAccount as keyof typeof ACCOUNTS_TO_ACCESS_TOKENS,
         media: Array.isArray(files.media)
           ? files.media
           : files.media
