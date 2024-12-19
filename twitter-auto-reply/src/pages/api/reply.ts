@@ -4,6 +4,11 @@ import formidable from "formidable";
 import fs from "fs";
 import { ACCOUNTS_TO_ACCESS_TOKENS } from "../../utils/constants";
 
+// Extend NextApiResponse to include flush
+interface ResponseWithFlush extends NextApiResponse {
+  flush?: () => void;
+}
+
 export const config = {
   api: {
     bodyParser: false,
@@ -19,11 +24,14 @@ interface ParsedData {
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: ResponseWithFlush
 ) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Transfer-Encoding", "chunked");
 
   try {
     const data = await parseForm(req);
@@ -40,6 +48,8 @@ export default async function handler(
       );
     const selectedAccount = data.selected_account;
 
+    console.log("selectedAccount: ", selectedAccount);
+
     // Get credentials for selected account
     const accountCredentials = ACCOUNTS_TO_ACCESS_TOKENS[selectedAccount];
 
@@ -49,13 +59,6 @@ export default async function handler(
       accessToken: accountCredentials.accessToken!,
       accessSecret: accountCredentials.accessTokenSecret!,
     });
-
-    const results: {
-      url: string;
-      status: string;
-      reply_id?: string;
-      message?: string;
-    }[] = [];
 
     const v2Client = client.v2;
 
@@ -72,90 +75,65 @@ export default async function handler(
       mediaIds = await Promise.all(mediaPromises);
     }
 
-    // Process URLs in reverse order
-    const reversedUrls = [...urls].reverse();
-
-    for (let i = 0; i < reversedUrls.length; i++) {
-      const url = reversedUrls[i];
-
-      // Reduced delay between tweets
-      if (i > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 3000)); // Reduced from 10s to 3s
-      }
-
+    // Process each URL
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
       try {
-        // Clean up the tweet ID - remove any whitespace or hidden characters
-        const tweetId = url.split("/").pop()!.trim();
-        let retries = 3;
+        const tweetId = url.split("/").pop()!;
 
-        while (retries > 0) {
-          try {
-            console.log(
-              `Attempting to reply to tweet ${url} (Attempt ${4 - retries}/3)`
-            );
+        console.log(
+          `[Tweet ${i + 1}/${urls.length}] Attempting to reply to: ${url}`
+        );
 
-            // Clean up the reply message
-            const cleanMessage = data.reply_message.trim();
+        const reply = await v2Client.reply(data.reply_message, tweetId, {
+          media:
+            mediaIds.length > 0
+              ? {
+                  media_ids: mediaIds.slice(0, 4) as
+                    | [string]
+                    | [string, string]
+                    | [string, string, string]
+                    | [string, string, string, string],
+                }
+              : undefined,
+        });
 
-            const reply = await v2Client.reply(cleanMessage, tweetId, {
-              media:
-                mediaIds.length > 0
-                  ? {
-                      media_ids: mediaIds.slice(0, 4) as
-                        | [string]
-                        | [string, string]
-                        | [string, string, string]
-                        | [string, string, string, string],
-                    }
-                  : undefined,
-            });
+        const result = {
+          url,
+          status: "success",
+          reply_id: reply.data.id,
+        };
 
-            results.push({
-              url,
-              status: "success",
-              reply_id: reply.data.id,
-            });
-            console.log(`Successfully replied to tweet: ${url}`);
+        // Write and flush each result immediately
+        res.write(JSON.stringify(result) + "\n");
+        if (res.flush) {
+          res.flush();
+        }
 
-            // Reduced delay after successful reply
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // Reduced from 5s to 2s
-            break;
-          } catch (error: any) {
-            console.error(
-              `Attempt ${4 - retries}/3 failed for tweet ${url}:`,
-              error.code,
-              error.message,
-              error.data || ""
-            );
+        console.log(
+          `[Tweet ${i + 1}/${urls.length}] Successfully replied to: ${url}`
+        );
 
-            if ((error.code === 503 || error.code === 429) && retries > 1) {
-              retries--;
-              const backoffTime = (4 - retries) * 5000; // Reduced from 8s to 5s base
-              console.log(`Waiting ${backoffTime / 1000}s before retry...`);
-              await new Promise((resolve) => setTimeout(resolve, backoffTime));
-              continue;
-            }
-            throw error;
-          }
+        if (i < urls.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
       } catch (error: any) {
-        console.error(`Final error processing tweet ${url}:`, {
-          code: error.code,
-          message: error.message,
-          data: error.data || "",
-          stack: error.stack,
-        });
+        console.error(
+          `[Tweet ${i + 1}/${urls.length}] Error processing tweet ${url}:`,
+          error
+        );
 
-        results.push({
+        const errorResult = {
           url,
           status: "error",
-          message:
-            error.code === 503
-              ? `Twitter service unavailable: ${error.message}`
-              : error.code === 429
-              ? `Rate limit exceeded: ${error.message}`
-              : error.message || "Failed to send reply",
-        });
+          message: error.message || "Failed to send reply",
+        };
+
+        // Write and flush error results immediately too
+        res.write(JSON.stringify(errorResult) + "\n");
+        if (res.flush) {
+          res.flush();
+        }
       }
     }
 
@@ -170,7 +148,7 @@ export default async function handler(
       });
     }
 
-    res.status(200).json({ results });
+    res.end(); // End the response stream
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Failed to process request" });

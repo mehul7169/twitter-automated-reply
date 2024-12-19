@@ -10,7 +10,7 @@ interface AccountSelectorProps {
 const AccountSelector: React.FC<AccountSelectorProps> = ({
   onAccountSelect,
 }) => {
-  const [selectedAccount, setSelectedAccount] = useState<Account>("mehul");
+  const [selectedAccount, setSelectedAccount] = useState<Account>("bot");
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selected = e.target.value as Account;
@@ -32,9 +32,9 @@ const AccountSelector: React.FC<AccountSelectorProps> = ({
         onChange={handleChange}
         className="mt-1 block w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
       >
-        {Object.keys(ACCOUNTS_TO_ACCESS_TOKENS).map((account) => (
-          <option key={account} value={account}>
-            {account.charAt(0).toUpperCase() + account.slice(1)}
+        {Object.entries(ACCOUNTS_TO_ACCESS_TOKENS).map(([key, value]) => (
+          <option key={key} value={key}>
+            {value.userHandle}
           </option>
         ))}
       </select>

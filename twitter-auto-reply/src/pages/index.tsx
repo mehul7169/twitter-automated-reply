@@ -26,24 +26,39 @@ export default function App() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [passwordError, setPasswordError] = useState<string>("");
+  const [processedCount, setProcessedCount] = useState<number>(0);
   const [pendingSubmission, setPendingSubmission] =
     useState<PendingSubmission | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedAccount, setSelectedAccount] =
-    useState<keyof typeof ACCOUNTS_TO_ACCESS_TOKENS>("mehul");
+    useState<keyof typeof ACCOUNTS_TO_ACCESS_TOKENS>("bot");
 
   const handleTweetUrlChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    setTweetUrls(value);
+    const lines = value
+      .split("\n")
+      .map((line, index) => {
+        const trimmedLine = line.trim();
+        // Only add number if line is not empty
+        return trimmedLine ? `${index + 1}. ${trimmedLine}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
 
+    setTweetUrls(lines);
+
+    // Clear results when URLs are modified
+    setResults(null);
+    setProcessedCount(0);
+
+    // Add new line if valid URL is entered
     if (value && !value.endsWith("\n")) {
-      const lines = value.split("\n");
-      const lastLine = lines[lines.length - 1].trim();
+      const lastLine = lines.split("\n").pop() || "";
       const urlPattern =
-        /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
+        /^\d+\.\s+https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
 
       if (urlPattern.test(lastLine)) {
-        setTweetUrls(value + "\n");
+        setTweetUrls(lines + "\n");
       }
     }
   };
@@ -66,16 +81,15 @@ export default function App() {
 
     const validUrls = urls
       .split("\n")
-      .map((url) => url.trim())
+      .map((line) => line.replace(/^\d+\.\s+/, "").trim()) // Remove numbering before validation
       .filter((url) => {
         if (!url) return false;
-        const cleanUrl = url.replace(/\s+$/g, "");
-        if (!urlPattern.test(cleanUrl)) {
-          errors.push(`Invalid Twitter/X URL format: ${cleanUrl}`);
+        if (!urlPattern.test(url)) {
+          errors.push(`Invalid Twitter/X URL format: ${url}`);
           return false;
         }
-        if (!seenUrls.has(cleanUrl)) {
-          seenUrls.add(cleanUrl);
+        if (!seenUrls.has(url)) {
+          seenUrls.add(url);
           return true;
         }
         return false;
@@ -116,13 +130,16 @@ export default function App() {
     if (!pendingSubmission) return;
 
     setIsLoading(true);
+    setResults([]);
+    setProcessedCount(0);
+    const totalTweets = pendingSubmission.validUrls.length;
+
     try {
       const formData = new FormData();
       formData.append("tweet_urls", pendingSubmission.validUrls.join("\n"));
       formData.append("reply_message", pendingSubmission.replyMessage);
       formData.append("selected_account", pendingSubmission.selectedAccount);
 
-      // Append media files
       selectedFiles.forEach((file) => {
         formData.append("media", file);
       });
@@ -132,8 +149,46 @@ export default function App() {
         body: formData,
       });
 
-      const data = await response.json();
-      setResults(data.results);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No reader available");
+
+      // Add console logs to debug the streaming
+      console.log("Starting to read stream...");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log("Stream complete");
+          break;
+        }
+
+        const chunk = new TextDecoder().decode(value);
+
+        console.log("Received chunk:", chunk);
+
+        const lines = chunk.split("\n").filter(Boolean);
+
+        for (const line of lines) {
+          try {
+            const result = JSON.parse(line);
+            console.log("Parsed result:", result);
+
+            setResults((prev) => {
+              const newResults = [...(prev || []), result];
+              console.log("Updated results:", newResults);
+              return newResults;
+            });
+
+            setProcessedCount((prev) => {
+              const newCount = prev + 1;
+              console.log("Updated count:", newCount);
+              return newCount;
+            });
+          } catch (e) {
+            console.error("Error parsing chunk:", e);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error:", error);
       setValidationErrors(["Failed to send replies. Please try again."]);
@@ -175,32 +230,15 @@ export default function App() {
               >
                 Tweet URLs (one per line):
               </label>
-              <div className="relative">
-                <textarea
-                  id="tweetUrls"
-                  value={tweetUrls}
-                  onChange={handleTweetUrlChange}
-                  placeholder="https://twitter.com/user/status/123456789..."
-                  rows={5}
-                  required
-                  className="w-full pl-16 pr-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
-                />
-                {/* Numbered list overlay */}
-                <div className="absolute top-3 left-4 pointer-events-none">
-                  {getNumberedUrls().map((url, index) => (
-                    <div key={index} className="text-gray-400 select-none">
-                      {index + 1}.
-                    </div>
-                  ))}
-                </div>
-                <div className="absolute top-3 left-16 right-4 pointer-events-none">
-                  {getNumberedUrls().map((url, index) => (
-                    <div key={index} className="text-transparent">
-                      {url}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <textarea
+                id="tweetUrls"
+                value={tweetUrls}
+                onChange={handleTweetUrlChange}
+                placeholder="Paste Twitter/X URLs here..."
+                rows={5}
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
+              />
             </div>
 
             <div>
@@ -281,7 +319,8 @@ export default function App() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  Processing...
+                  Processing... ({processedCount}/
+                  {pendingSubmission?.validUrls.length || 0})
                 </span>
               ) : (
                 "Send Replies"
@@ -289,10 +328,11 @@ export default function App() {
             </button>
           </form>
 
-          {results && (
+          {results && results.length > 0 && (
             <div className="mt-8">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Results:
+                Results ({processedCount}/
+                {pendingSubmission?.validUrls.length || 0}):
               </h2>
               <div className="space-y-4">
                 {results.map((result, index) => (
@@ -319,6 +359,7 @@ export default function App() {
                             : "text-red-800"
                         }`}
                       >
+                        Tweet {index + 1}:{" "}
                         {result.status.charAt(0).toUpperCase() +
                           result.status.slice(1)}
                       </p>
