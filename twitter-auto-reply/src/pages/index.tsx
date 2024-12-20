@@ -4,11 +4,13 @@ import PasswordModal from "../components/PasswordModal";
 import FileUploadButton from "../components/FileUploadButton";
 import AccountSelector from "../components/AccountSelectors";
 import { ACCOUNTS_TO_ACCESS_TOKENS } from "../utils/constants";
+import { ActionType } from "../utils/constants";
 
 interface Result {
   url: string;
   status: "success" | "error";
   reply_id?: string;
+  retweet_id?: string;
   message?: string;
 }
 
@@ -32,6 +34,7 @@ export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedAccount, setSelectedAccount] =
     useState<keyof typeof ACCOUNTS_TO_ACCESS_TOKENS>("bot");
+  const [selectedAction, setSelectedAction] = useState<ActionType>("comment");
 
   const handleTweetUrlChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -132,19 +135,26 @@ export default function App() {
     setIsLoading(true);
     setResults([]);
     setProcessedCount(0);
-    const totalTweets = pendingSubmission.validUrls.length;
 
     try {
       const formData = new FormData();
       formData.append("tweet_urls", pendingSubmission.validUrls.join("\n"));
-      formData.append("reply_message", pendingSubmission.replyMessage);
       formData.append("selected_account", pendingSubmission.selectedAccount);
 
-      selectedFiles.forEach((file) => {
-        formData.append("media", file);
-      });
+      if (selectedAction === "comment") {
+        formData.append("reply_message", pendingSubmission.replyMessage);
+        selectedFiles.forEach((file) => {
+          formData.append("media", file);
+        });
+      }
 
-      const response = await fetch("/api/reply", {
+      const endpoint = {
+        comment: "/api/reply",
+        like: "/api/like",
+        retweet: "/api/retweet",
+      }[selectedAction];
+
+      const response = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
@@ -191,7 +201,7 @@ export default function App() {
       }
     } catch (error) {
       console.error("Error:", error);
-      setValidationErrors(["Failed to send replies. Please try again."]);
+      setValidationErrors(["Failed to process request. Please try again."]);
     } finally {
       setIsLoading(false);
       setPendingSubmission(null);
@@ -206,6 +216,23 @@ export default function App() {
     account: keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
   ) => {
     setSelectedAccount(account);
+  };
+
+  const getActionButtonText = (action: ActionType, isLoading: boolean) => {
+    if (isLoading) {
+      return `Processing... (${processedCount}/${
+        pendingSubmission?.validUrls.length || 0
+      })`;
+    }
+
+    switch (action) {
+      case "comment":
+        return "Send Replies";
+      case "like":
+        return "Like Tweets";
+      case "retweet":
+        return "Retweet Posts";
+    }
   };
 
   // Rest of the JSX remains the same
@@ -223,6 +250,27 @@ export default function App() {
 
         <main className="bg-white rounded-xl shadow-lg p-6 md:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="mb-6">
+              <label
+                htmlFor="actionType"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Action Type:
+              </label>
+              <select
+                id="actionType"
+                value={selectedAction}
+                onChange={(e) =>
+                  setSelectedAction(e.target.value as ActionType)
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="comment">Comment</option>
+                <option value="like">Like</option>
+                <option value="retweet">Retweet</option>
+              </select>
+            </div>
+
             <div>
               <label
                 htmlFor="tweetUrls"
@@ -241,37 +289,39 @@ export default function App() {
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="replyMessage"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Reply Message:
-              </label>
-              <div className="relative">
-                <textarea
-                  id="replyMessage"
-                  value={replyMessage}
-                  onChange={(e) => setReplyMessage(e.target.value)}
-                  placeholder="Enter your reply message..."
-                  rows={3}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
-                />
-                <div className="absolute bottom-3 right-3">
-                  <FileUploadButton onFileSelect={handleFileSelect} />
+            {selectedAction === "comment" && (
+              <div>
+                <label
+                  htmlFor="replyMessage"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Reply Message:
+                </label>
+                <div className="relative">
+                  <textarea
+                    id="replyMessage"
+                    value={replyMessage}
+                    onChange={(e) => setReplyMessage(e.target.value)}
+                    placeholder="Enter your reply message..."
+                    rows={3}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
+                  />
+                  <div className="absolute bottom-3 right-3">
+                    <FileUploadButton onFileSelect={handleFileSelect} />
+                  </div>
                 </div>
+                {selectedFiles.length > 0 && (
+                  <div className="mt-2 flex gap-2">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="text-sm text-gray-600">
+                        {file.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {selectedFiles.length > 0 && (
-                <div className="mt-2 flex gap-2">
-                  {selectedFiles.map((file, index) => (
-                    <div key={index} className="text-sm text-gray-600">
-                      {file.name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {validationErrors.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -323,7 +373,7 @@ export default function App() {
                   {pendingSubmission?.validUrls.length || 0})
                 </span>
               ) : (
-                "Send Replies"
+                getActionButtonText(selectedAction, false)
               )}
             </button>
           </form>
@@ -375,8 +425,12 @@ export default function App() {
                     )}
                     {result.status === "success" && (
                       <p className="text-sm text-green-700 mt-1">
-                        <span className="font-medium">Reply Tweet ID:</span>{" "}
-                        {result.reply_id}
+                        {selectedAction === "comment" && (
+                          <>
+                            <span className="font-medium">Reply Tweet ID:</span>{" "}
+                            {result.reply_id}
+                          </>
+                        )}
                       </p>
                     )}
                   </div>
