@@ -7,15 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Define models for tracking actions
+// Track each API request session
+model APIRequest {
+  id           String          @id @default(uuid())
+  timestamp    DateTime        @default(now())
+  actionType   String // "comment", "like", "retweet"
+  account      String // Account that initiated the request
+  totalTweets  Int // Number of tweets in this request
+  successCount Int // Number of successful actions
+  errorCount   Int // Number of failed actions
+  actions      TwitterAction[] // Relationship to individual actions
+  ipAddress    String? // Optional: track request origin
+  userAgent    String? // Optional: track client info
+}
+
+// Track individual tweet actions
 model TwitterAction {
-  id          String      @id @default(uuid())
-  tweetUrl    String
-  actionType  String      // "comment", "like", "retweet"
-  account     String      // The account that performed the action
-  status      String      // "success" or "error"
-  message     String?     // Error message if any
-  replyId     String?     // For comments
-  retweetId   String?     // For retweets
-  createdAt   DateTime    @default(now())
-} 
+  id         String     @id @default(uuid())
+  apiRequest APIRequest @relation(fields: [requestId], references: [id])
+  requestId  String
+  tweetUrl   String
+  tweetId    String // Extracted from URL
+  status     String // "success" or "error"
+  message    String? // Error message if any
+  replyId    String? // For comments
+  retweetId  String? // For retweets
+  createdAt  DateTime   @default(now())
+}
+
+// Optional: Track account usage
+model AccountMetrics {
+  id            String   @id @default(uuid())
+  account       String   @unique
+  totalRequests Int      @default(0)
+  totalActions  Int      @default(0)
+  successRate   Float    @default(0)
+  lastUsed      DateTime @default(now())
+  dailyUsage    Json? // Store daily usage patterns
+}
