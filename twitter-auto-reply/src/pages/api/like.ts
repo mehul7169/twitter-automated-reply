@@ -69,7 +69,7 @@ export default async function handler(
           },
         });
 
-        await prisma.aPIRequest.update({
+        await prisma.apiRequest.update({
           where: { id: apiRequest.id },
           data: { successCount: { increment: 1 } },
         });
@@ -92,7 +92,7 @@ export default async function handler(
           },
         });
 
-        await prisma.aPIRequest.update({
+        await prisma.apiRequest.update({
           where: { id: apiRequest.id },
           data: { errorCount: { increment: 1 } },
         });

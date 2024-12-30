@@ -14,7 +14,7 @@ export default async function handler(
     console.log(startOfDay, endOfDay);
 
     // Get all API requests for yesterday
-    const apiRequests = await prisma.aPIRequest.findMany({
+    const apiRequests = await prisma.apiRequest.findMany({
       where: {
         timestamp: {
           gte: startOfDay,

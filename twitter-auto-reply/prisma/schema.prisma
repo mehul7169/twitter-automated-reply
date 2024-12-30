@@ -8,7 +8,7 @@ datasource db {
 }
 
 // Track each API request session
-model APIRequest {
+model ApiRequest {
   id           String          @id @default(uuid())
   timestamp    DateTime        @default(now())
   actionType   String // "comment", "like", "retweet"
@@ -24,7 +24,7 @@ model APIRequest {
 // Track individual tweet actions
 model TwitterAction {
   id         String     @id @default(uuid())
-  apiRequest APIRequest @relation(fields: [requestId], references: [id])
+  apiRequest ApiRequest @relation(fields: [requestId], references: [id])
   requestId  String
   tweetUrl   String
   tweetId    String // Extracted from URL

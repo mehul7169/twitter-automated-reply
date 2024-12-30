@@ -9,7 +9,7 @@ export async function createAPIRequestWithActions(
   userAgent?: string,
   ipAddress?: string
 ) {
-  return await prisma.aPIRequest.create({
+  return await prisma.apiRequest.create({
     data: {
       actionType,
       account,
