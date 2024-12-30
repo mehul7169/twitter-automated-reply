@@ -6,6 +6,8 @@ import {
   ACCOUNTS_TO_ACCESS_TOKENS,
   YASHRAJ_ACCOUNT_ACCESS_TOKENS,
 } from "../../utils/constants";
+import prisma from "../../utils/db";
+import { createAPIRequestWithActions } from "../../utils/db";
 
 // Extend NextApiResponse to include flush
 interface ResponseWithFlush extends NextApiResponse {
@@ -105,17 +107,23 @@ export default async function handler(
 
     console.log(urls);
 
+    const apiRequest = await createAPIRequestWithActions(
+      "comment",
+      selectedAccount,
+      urls.length,
+      req.headers["user-agent"],
+      req.headers["x-forwarded-for"] as string
+    );
+
     // Process each URL
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
+      const tweetId = url.split("/").pop()!;
       console.log("url: ", url);
+      console.log(
+        `[Tweet ${i + 1}/${urls.length}] Attempting to reply to: ${url}`
+      );
       try {
-        const tweetId = url.split("/").pop()!;
-
-        console.log(
-          `[Tweet ${i + 1}/${urls.length}] Attempting to reply to: ${url}`
-        );
-
         const reply = await v2Client.reply(data.reply_message, tweetId, {
           media:
             mediaIds.length > 0
@@ -134,6 +142,22 @@ export default async function handler(
           status: "success",
           reply_id: reply.data.id,
         };
+
+        // Log to database
+        await prisma.twitterAction.create({
+          data: {
+            requestId: apiRequest.id,
+            tweetUrl: url,
+            tweetId,
+            status: "success",
+            replyId: reply.data.id,
+          },
+        });
+
+        await prisma.aPIRequest.update({
+          where: { id: apiRequest.id },
+          data: { successCount: { increment: 1 } },
+        });
 
         // Write and flush each result immediately
         res.write(JSON.stringify(result) + "\n");
@@ -165,6 +189,22 @@ export default async function handler(
         if (res.flush) {
           res.flush();
         }
+
+        // Log to database
+        await prisma.twitterAction.create({
+          data: {
+            requestId: apiRequest.id,
+            tweetUrl: url,
+            tweetId,
+            status: "error",
+            message: error.message,
+          },
+        });
+
+        await prisma.aPIRequest.update({
+          where: { id: apiRequest.id },
+          data: { errorCount: { increment: 1 } },
+        });
       }
     }
 

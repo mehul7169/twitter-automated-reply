@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { TwitterApi } from "twitter-api-v2";
 import formidable from "formidable";
 import { ACCOUNTS_TO_ACCESS_TOKENS } from "../../utils/constants";
+import prisma, { createAPIRequestWithActions } from "../../utils/db";
 
 export const config = {
   api: {
@@ -45,11 +46,37 @@ export default async function handler(
       accessSecret: accountCredentials.accessTokenSecret!,
     });
 
+    const apiRequest = await createAPIRequestWithActions(
+      "retweet",
+      data.selected_account,
+      urls.length,
+      req.headers["user-agent"],
+      req.headers["x-forwarded-for"] as string
+    );
+
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
+      const tweetId = url.split("/").pop()!;
       try {
-        const tweetId = url.split("/").pop()!;
-        await client.v2.retweet(accountCredentials.userId!, tweetId);
+        const retweetResponse = await client.v2.retweet(
+          accountCredentials.userId!,
+          tweetId
+        );
+
+        await prisma.twitterAction.create({
+          data: {
+            requestId: apiRequest.id,
+            tweetUrl: url,
+            tweetId,
+            status: "success",
+            retweetId: tweetId,
+          },
+        });
+
+        await prisma.aPIRequest.update({
+          where: { id: apiRequest.id },
+          data: { successCount: { increment: 1 } },
+        });
 
         const result = {
           url,
@@ -59,6 +86,21 @@ export default async function handler(
         res.write(JSON.stringify(result) + "\n");
         if (res.flush) res.flush();
       } catch (error: any) {
+        await prisma.twitterAction.create({
+          data: {
+            requestId: apiRequest.id,
+            tweetUrl: url,
+            tweetId,
+            status: "error",
+            message: error.message,
+          },
+        });
+
+        await prisma.aPIRequest.update({
+          where: { id: apiRequest.id },
+          data: { errorCount: { increment: 1 } },
+        });
+
         const errorResult = {
           url,
           status: "error",
