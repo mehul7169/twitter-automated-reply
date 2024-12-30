@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Define models for tracking actions
+model TwitterAction {
+  id          String      @id @default(uuid())
+  tweetUrl    String
+  actionType  String      // "comment", "like", "retweet"
+  account     String      // The account that performed the action
+  status      String      // "success" or "error"
+  message     String?     // Error message if any
+  replyId     String?     // For comments
+  retweetId   String?     // For retweets
+  createdAt   DateTime    @default(now())
+} 

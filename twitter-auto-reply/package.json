@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "@supabase/supabase-js": "^2.47.10",
     "@types/formidable": "^3.4.5",
     "dotenv": "^16.4.7",
     "formidable": "^3.5.2",
     "next": "^14.0.4",
+    "prisma": "^6.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "twitter-api-v2": "^1.18.2"
