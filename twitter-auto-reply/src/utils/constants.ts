@@ -7,6 +7,7 @@ export const ACCOUNTS_TO_ACCESS_TOKENS = {
   },
   yashraj: {
     userHandle: "yashraj",
+    userId: "1818655003747532804",
     accessToken: process.env.TWITTER_YASHRAJ_ACCESS_TOKEN,
     accessTokenSecret: process.env.TWITTER_YASHRAJ_ACCESS_TOKEN_SECRET,
   },
