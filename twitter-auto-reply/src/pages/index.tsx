@@ -41,40 +41,31 @@ export default function App() {
 
   const handleTweetUrlChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    const lines = value
-      .split("\n")
+    const lines = value.split("\n");
+
+    // Keep empty lines but number non-empty ones
+    const formattedLines = lines
       .map((line, index) => {
         const trimmedLine = line.trim();
-        // Only add number if line is not empty
-        return trimmedLine ? `${index + 1}. ${trimmedLine}` : "";
-      })
-      .filter(Boolean)
-      .join("\n");
 
-    setTweetUrls(lines);
+        // Return empty string for empty lines to preserve them
+        if (!trimmedLine) return "";
+
+        // Check if line already has numbering
+        if (trimmedLine.match(/^\d+\./)) {
+          return trimmedLine;
+        }
+
+        // Add numbering only to new lines
+        return `${index + 1}. ${trimmedLine}`;
+      })
+      .join("\n"); // Remove the filter(Boolean) to keep empty lines
+
+    setTweetUrls(formattedLines);
 
     // Clear results when URLs are modified
     setResults(null);
     setProcessedCount(0);
-
-    // Add new line if valid URL is entered
-    if (value && !value.endsWith("\n")) {
-      const lastLine = lines.split("\n").pop() || "";
-      const urlPattern =
-        /^\d+\.\s+https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
-
-      if (urlPattern.test(lastLine)) {
-        setTweetUrls(lines + "\n");
-      }
-    }
-  };
-
-  const getNumberedUrls = (): string[] => {
-    if (!tweetUrls.trim()) return [];
-    return tweetUrls
-      .split("\n")
-      .filter((url) => url.trim())
-      .map((url) => url.trim());
   };
 
   const validateUrls = (
