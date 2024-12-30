@@ -2,7 +2,10 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { TwitterApi } from "twitter-api-v2";
 import formidable from "formidable";
 import fs from "fs";
-import { ACCOUNTS_TO_ACCESS_TOKENS } from "../../utils/constants";
+import {
+  ACCOUNTS_TO_ACCESS_TOKENS,
+  YASHRAJ_ACCOUNT_ACCESS_TOKENS,
+} from "../../utils/constants";
 
 // Extend NextApiResponse to include flush
 interface ResponseWithFlush extends NextApiResponse {
@@ -18,7 +21,9 @@ export const config = {
 interface ParsedData {
   tweet_urls: string;
   reply_message: string;
-  selected_account: keyof typeof ACCOUNTS_TO_ACCESS_TOKENS;
+  selected_account:
+    | keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
+    | keyof typeof YASHRAJ_ACCOUNT_ACCESS_TOKENS;
   media?: formidable.File[];
 }
 
@@ -39,26 +44,47 @@ export default async function handler(
     const urls = data.tweet_urls
       .split("\n")
       .map((url) => url.trim())
-      .filter(
-        (url) =>
+      .filter((url) => {
+        const isValid =
           url &&
           url.match(
-            /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/
-          )
-      );
+            /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/(status|statuses)\/[0-9]+$/
+          );
+        console.log("URL validation:", { url, isValid }); // Debug log
+        return isValid;
+      });
+
+    console.log("Filtered URLs:", urls); // Debug log
+
     const selectedAccount = data.selected_account;
 
     console.log("selectedAccount: ", selectedAccount);
 
-    // Get credentials for selected account
-    const accountCredentials = ACCOUNTS_TO_ACCESS_TOKENS[selectedAccount];
+    // Check which account collection contains the selected account
+    const isYashrajAccount = selectedAccount in YASHRAJ_ACCOUNT_ACCESS_TOKENS;
 
+    // Get credentials based on account type
+    const accountCredentials = isYashrajAccount
+      ? YASHRAJ_ACCOUNT_ACCESS_TOKENS[
+          selectedAccount as keyof typeof YASHRAJ_ACCOUNT_ACCESS_TOKENS
+        ]
+      : ACCOUNTS_TO_ACCESS_TOKENS[
+          selectedAccount as keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
+        ];
+
+    // Create client with appropriate API keys
     const client = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY!,
-      appSecret: process.env.TWITTER_API_SECRET!,
+      appKey: isYashrajAccount
+        ? process.env.TWITTER_YASHRAJ_API_KEY!
+        : process.env.TWITTER_API_KEY!,
+      appSecret: isYashrajAccount
+        ? process.env.TWITTER_YASHRAJ_API_SECRET!
+        : process.env.TWITTER_API_SECRET!,
       accessToken: accountCredentials.accessToken!,
       accessSecret: accountCredentials.accessTokenSecret!,
     });
+
+    console.log("client: ", client);
 
     const v2Client = client.v2;
 
@@ -75,9 +101,14 @@ export default async function handler(
       mediaIds = await Promise.all(mediaPromises);
     }
 
+    console.log("starting twitter process");
+
+    console.log(urls);
+
     // Process each URL
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
+      console.log("url: ", url);
       try {
         const tweetId = url.split("/").pop()!;
 

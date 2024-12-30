@@ -5,11 +5,11 @@ export const ACCOUNTS_TO_ACCESS_TOKENS = {
     accessToken: process.env.TWITTER_MEHUL_ACCESS_TOKEN,
     accessTokenSecret: process.env.TWITTER_MEHUL_ACCESS_TOKEN_SECRET,
   },
-  // yashraj: {
-  //   userHandle: "yashraj",
-  //   accessToken: process.env.TWITTER_YASHRAJ_ACCESS_TOKEN,
-  //   accessTokenSecret: process.env.TWITTER_YASHRAJ_ACCESS_TOKEN_SECRET,
-  // },
+  yashraj: {
+    userHandle: "yashraj",
+    accessToken: process.env.TWITTER_YASHRAJ_ACCESS_TOKEN,
+    accessTokenSecret: process.env.TWITTER_YASHRAJ_ACCESS_TOKEN_SECRET,
+  },
   bot: {
     userHandle: "bot",
     userId: "1867774732306726912",
@@ -40,6 +40,22 @@ export const ACCOUNTS_TO_ACCESS_TOKENS = {
     userId: "1808836289556590595",
     accessToken: process.env.TWITTER_RIGHT_WINGERS_00_ACCESS_TOKEN,
     accessTokenSecret: process.env.TWITTER_RIGHT_WINGERS_00_ACCESS_TOKEN_SECRET,
+  },
+};
+
+export const YASHRAJ_ACCOUNT_ACCESS_TOKENS = {
+  YashrajJ79015: {
+    userHandle: "Railwaysisbest",
+    userId: "1808836289556590595",
+    accessToken: process.env.TWITTER_YASHRAJ_YASHRAJ_J_79015_ACCESS_TOKEN,
+    accessTokenSecret:
+      process.env.TWITTER_YASHRAJ_YASHRAJ_J_79015_ACCESS_TOKEN_SECRET,
+  },
+  yashraj_mehul: {
+    userHandle: "Mehul Agarwal",
+    userId: "1141978754815672321",
+    accessToken: process.env.TWITTER_YASHRAJ_MEHUL_ACCESS_TOKEN,
+    accessTokenSecret: process.env.TWITTER_YASHRAJ_MEHUL_ACCESS_TOKEN_SECRET,
   },
 };
 

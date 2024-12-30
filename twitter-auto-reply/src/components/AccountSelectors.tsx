@@ -1,45 +1,50 @@
-import { useState } from "react";
-import { ACCOUNTS_TO_ACCESS_TOKENS } from "../utils/constants";
-
-type Account = keyof typeof ACCOUNTS_TO_ACCESS_TOKENS;
+import {
+  ACCOUNTS_TO_ACCESS_TOKENS,
+  YASHRAJ_ACCOUNT_ACCESS_TOKENS,
+} from "../utils/constants";
 
 interface AccountSelectorProps {
-  onAccountSelect: (account: Account) => void;
+  onAccountSelect: (
+    account:
+      | keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
+      | keyof typeof YASHRAJ_ACCOUNT_ACCESS_TOKENS
+  ) => void;
 }
 
-const AccountSelector: React.FC<AccountSelectorProps> = ({
+export default function AccountSelector({
   onAccountSelect,
-}) => {
-  const [selectedAccount, setSelectedAccount] = useState<Account>("bot");
-
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selected = e.target.value as Account;
-    setSelectedAccount(selected);
-    onAccountSelect(selected);
-  };
-
+}: AccountSelectorProps) {
   return (
-    <div className="mb-4">
+    <div className="max-w-xs">
       <label
-        htmlFor="account-select"
+        htmlFor="account"
         className="block text-sm font-medium text-gray-700 mb-2"
       >
-        Select Account
+        Select Account:
       </label>
       <select
-        id="account-select"
-        value={selectedAccount}
-        onChange={handleChange}
-        className="mt-1 block w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+        id="account"
+        onChange={(e) => onAccountSelect(e.target.value as any)}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       >
-        {Object.entries(ACCOUNTS_TO_ACCESS_TOKENS).map(([key, value]) => (
-          <option key={key} value={key}>
-            {value.userHandle}
-          </option>
-        ))}
+        <optgroup label="Main Accounts">
+          {Object.entries(ACCOUNTS_TO_ACCESS_TOKENS).map(([key, account]) => (
+            <option key={key} value={key}>
+              {account.userHandle}
+            </option>
+          ))}
+        </optgroup>
+
+        <optgroup label="Yashraj Accounts">
+          {Object.entries(YASHRAJ_ACCOUNT_ACCESS_TOKENS).map(
+            ([key, account]) => (
+              <option key={key} value={key}>
+                {account.userHandle}
+              </option>
+            )
+          )}
+        </optgroup>
       </select>
     </div>
   );
-};
-
-export default AccountSelector;
+}

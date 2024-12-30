@@ -3,7 +3,10 @@ import type { JSX } from "react";
 import PasswordModal from "../components/PasswordModal";
 import FileUploadButton from "../components/FileUploadButton";
 import AccountSelector from "../components/AccountSelectors";
-import { ACCOUNTS_TO_ACCESS_TOKENS } from "../utils/constants";
+import {
+  ACCOUNTS_TO_ACCESS_TOKENS,
+  YASHRAJ_ACCOUNT_ACCESS_TOKENS,
+} from "../utils/constants";
 import { ActionType } from "../utils/constants";
 
 interface Result {
@@ -80,11 +83,11 @@ export default function App() {
     const errors: string[] = [];
     const seenUrls = new Set<string>();
     const urlPattern =
-      /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+$/;
+      /^https?:\/\/(twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/(status|statuses)\/[0-9]+$/;
 
     const validUrls = urls
       .split("\n")
-      .map((line) => line.replace(/^\d+\.\s+/, "").trim()) // Remove numbering before validation
+      .map((line) => line.replace(/^\d+\.\s+/, "").trim())
       .filter((url) => {
         if (!url) return false;
         if (!urlPattern.test(url)) {
@@ -138,7 +141,14 @@ export default function App() {
 
     try {
       const formData = new FormData();
-      formData.append("tweet_urls", pendingSubmission.validUrls.join("\n"));
+      // Remove numbering and clean URLs before sending
+      const cleanUrls = pendingSubmission.validUrls.map((url) =>
+        url.replace(/^\d+\.\s+/, "").trim()
+      );
+
+      console.log("Sending URLs to API:", cleanUrls); // Debug log
+
+      formData.append("tweet_urls", cleanUrls.join("\n"));
       formData.append("selected_account", pendingSubmission.selectedAccount);
 
       if (selectedAction === "comment") {
@@ -213,9 +223,11 @@ export default function App() {
   };
 
   const handleAccountSelect = (
-    account: keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
+    account:
+      | keyof typeof ACCOUNTS_TO_ACCESS_TOKENS
+      | keyof typeof YASHRAJ_ACCOUNT_ACCESS_TOKENS
   ) => {
-    setSelectedAccount(account);
+    setSelectedAccount(account as any); // Type assertion needed due to state type
   };
 
   const getActionButtonText = (action: ActionType, isLoading: boolean) => {
